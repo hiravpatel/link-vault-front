@@ -10,7 +10,7 @@ const apiClient = axios.create({
 // Request interceptor: attach token
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('lv_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -33,8 +33,8 @@ apiClient.interceptors.response.use(
   (error) => {
     // Handle 401 Unauthorized
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      localStorage.removeItem('lv_token');
+      localStorage.removeItem('lv_user');
       if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
         window.location.href = '/login';
       }

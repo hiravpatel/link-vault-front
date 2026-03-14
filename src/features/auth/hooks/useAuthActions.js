@@ -20,7 +20,7 @@ export const useAuthActions = () => {
       const response = await authApi[action](data);
 
       const { token, user } = response.data;
-      setAuthState(user, token);
+      setAuthState(token, user);
 
       toast.success(response.message || 'Success!', { id: loadingToast });
 
