@@ -1,0 +1,143 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-dark-800 text-dark-50 font-sans;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overscroll-behavior: none;
+  }
+
+  #root {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-dark-700;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-dark-400 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary-500;
+  }
+
+  input, textarea, select {
+    outline: none;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/5 backdrop-blur-md border border-white/10;
+  }
+
+  .glass-hover {
+    @apply hover:bg-white/10 transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-white font-semibold
+           px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2
+           shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:-translate-y-0.5
+           active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none;
+  }
+
+  .btn-secondary {
+    @apply bg-dark-600 hover:bg-dark-500 active:bg-dark-400 text-dark-100 font-medium
+           px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2
+           border border-white/10 hover:border-white/20;
+  }
+
+  .btn-ghost {
+    @apply hover:bg-white/10 active:bg-white/20 text-dark-200 hover:text-dark-50
+           px-3 py-2 rounded-lg transition-all duration-150 flex items-center gap-2;
+  }
+
+  .btn-danger {
+    @apply bg-red-500/20 hover:bg-red-500/30 active:bg-red-500/40 text-red-400
+           hover:text-red-300 px-3 py-2 rounded-lg transition-all duration-200
+           border border-red-500/30 hover:border-red-500/50;
+  }
+
+  .input-field {
+    @apply w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3
+           text-dark-50 placeholder-dark-300 text-sm
+           focus:border-primary-500 focus:bg-dark-700 focus:ring-2 focus:ring-primary-500/20
+           transition-all duration-200;
+  }
+
+  .card {
+    @apply glass rounded-2xl p-5 transition-all duration-300 hover:border-white/20
+           hover:shadow-lg hover:shadow-black/20 hover:-translate-y-0.5;
+  }
+
+  .tag-pill {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium
+           transition-all duration-200 hover:scale-105 cursor-pointer;
+  }
+
+  .sidebar-item {
+    @apply flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer
+           text-sm font-medium transition-all duration-200 hover:bg-white/10;
+  }
+
+  .sidebar-item.active {
+    @apply bg-primary-500/20 text-primary-300 border border-primary-500/30;
+  }
+
+  /* Mobile safe areas */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary-400 to-accent-teal bg-clip-text text-transparent;
+  }
+
+  /* Glow effects */
+  .glow-primary {
+    box-shadow: 0 0 20px rgba(108, 99, 255, 0.3);
+  }
+
+  /* Page transitions */
+  .page-enter {
+    @apply animate-fade-in;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
