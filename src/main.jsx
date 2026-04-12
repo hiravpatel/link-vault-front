@@ -1,10 +1,16 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App.jsx'
-import './index.css'
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App.jsx';
+import './index.css';
+import AppErrorBoundary from './shared/components/AppErrorBoundary.jsx';
+import { setupGlobalErrorMonitoring } from './shared/utils/errorMonitoring.js';
+
+setupGlobalErrorMonitoring();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   </React.StrictMode>,
-)
+);

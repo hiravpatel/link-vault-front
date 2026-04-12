@@ -1,31 +1,42 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, Lock, User, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuthActions } from '../hooks/useAuthActions';
 
 export default function Register() {
-  const [formData, setFormData] = useState({ name: '', email: '', password: '' });
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
   const [showPassword, setShowPassword] = useState(false);
   const { register, loading } = useAuthActions();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (formData.password !== formData.confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
     await register(formData);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-dark-800 p-4 sm:p-6 relative overflow-hidden">
-      {/* Decorative Orbs */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary-500/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent-coral/5 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="w-full max-w-md animate-fade-in relative z-10">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-500/10 rounded-2xl mb-4 border border-primary-500/20">
-            <span className="text-3xl">🦊</span>
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-500/10 rounded-2xl mb-4 border border-primary-500/20 text-primary-300 text-xl font-bold">
+            LV
           </div>
           <h1 className="text-3xl font-bold text-dark-50 tracking-tight">Create Account</h1>
-          <p className="text-dark-400 mt-2">Start your personal link vault today</p>
+          <p className="text-dark-400 mt-2">Build your personal vault for links, notes, and prompts.</p>
         </div>
 
         <div className="glass rounded-3xl p-6 sm:p-8 border border-white/5 shadow-2xl">
@@ -40,7 +51,7 @@ export default function Register() {
                   placeholder="Jane Doe"
                   className="input-field pl-11"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(event) => setFormData(prev => ({ ...prev, name: event.target.value }))}
                 />
               </div>
             </div>
@@ -55,7 +66,7 @@ export default function Register() {
                   placeholder="jane@example.com"
                   className="input-field pl-11"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(event) => setFormData(prev => ({ ...prev, email: event.target.value }))}
                 />
               </div>
             </div>
@@ -67,20 +78,37 @@ export default function Register() {
                 <input
                   required
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
+                  placeholder="Create a strong password"
                   className="input-field pl-11 pr-11"
                   value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  onChange={(event) => setFormData(prev => ({ ...prev, password: event.target.value }))}
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowPassword(prev => !prev)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-500 hover:text-dark-300 transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-              <p className="text-[10px] text-dark-500 mt-1.5 ml-1">Must be at least 6 characters</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dark-300 mb-1.5 ml-1">Confirm Password</label>
+              <div className="relative group">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-dark-500 group-focus-within:text-primary-400 transition-colors" />
+                <input
+                  required
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Repeat your password"
+                  className="input-field pl-11"
+                  value={formData.confirmPassword}
+                  onChange={(event) => setFormData(prev => ({ ...prev, confirmPassword: event.target.value }))}
+                />
+              </div>
+              <p className="text-[10px] text-dark-500 mt-1.5 ml-1">
+                Use at least 8 characters with uppercase, lowercase, number, and special character.
+              </p>
             </div>
 
             <button
@@ -104,7 +132,7 @@ export default function Register() {
         </div>
 
         <p className="text-center text-dark-500 text-[11px] mt-8 uppercase tracking-widest font-medium">
-          Linkvault • Personal Bookmark Manager
+          Linkvault • Personal knowledge vault
         </p>
       </div>
     </div>

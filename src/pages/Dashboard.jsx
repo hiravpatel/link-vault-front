@@ -1,134 +1,119 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Menu, Bookmark, Search } from 'lucide-react';
-
-// Shared Components
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { Bookmark, Layers, Menu, Search } from 'lucide-react';
 import Topbar from '../shared/components/Topbar';
 import Sidebar from '../shared/components/Sidebar';
-
-// Features
 import { useBookmarks } from '../features/bookmarks/hooks/useBookmarks';
 import { useTags } from '../features/tags/hooks/useTags';
 import BookmarkCard from '../features/bookmarks/components/BookmarkCard';
 import AddBookmarkModal from '../features/bookmarks/components/AddBookmarkModal';
 
-export default function Dashboard() {
-  // Hooks with integrated state and toasts
-  const { bookmarks, setBookmarks, loading: bmLoading, fetchBookmarks, addBookmark, deleteBookmark } = useBookmarks();
-  const { tags, setTags, loading: tagLoading, fetchTags, addTag, deleteTag } = useTags();
+function getRequestParams({ activeFilter, deferredSearchQuery, selectedTagId, selectedCategory }) {
+  const params = {
+    q: deferredSearchQuery || undefined,
+    tagId: selectedTagId || undefined,
+    category: selectedCategory || undefined,
+    limit: 100,
+    sort: 'newest',
+  };
 
-  // Local UI State
+  if (['link', 'note', 'prompt'].includes(activeFilter)) {
+    params.type = activeFilter;
+  }
+
+  if (activeFilter === 'recent') {
+    const recentDate = new Date();
+    recentDate.setDate(recentDate.getDate() - 7);
+    params.from = recentDate.toISOString();
+  }
+
+  return params;
+}
+
+export default function Dashboard() {
+  const { bookmarks, meta, loading: bmLoading, fetchBookmarks, addBookmark, deleteBookmark } = useBookmarks();
+  const { tags, loading: tagLoading, fetchTags, addTag, deleteTag } = useTags();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedTagId, setSelectedTagId] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Initial Load
+  const deferredSearchQuery = useDeferredValue(searchQuery.trim());
+
+  const requestParams = useMemo(() => getRequestParams({
+    activeFilter,
+    deferredSearchQuery,
+    selectedTagId,
+    selectedCategory,
+  }), [activeFilter, deferredSearchQuery, selectedTagId, selectedCategory]);
+
   useEffect(() => {
-    fetchBookmarks();
     fetchTags();
-  }, [fetchBookmarks, fetchTags]);
+  }, [fetchTags]);
 
-  // Combined Filtering Logic
-  const filteredBookmarks = useMemo(() => {
-    let result = [...bookmarks];
+  useEffect(() => {
+    fetchBookmarks(requestParams);
+  }, [fetchBookmarks, requestParams]);
 
-    // 1. App-level Filter
-    if (activeFilter === 'recent') {
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      result = result.filter(b => new Date(b.created_at) >= sevenDaysAgo);
-    }
-
-    // 2. Tag Selection
-    if (selectedTagId) {
-      result = result.filter(b => 
-        b.tags && b.tags.some(t => t._id === selectedTagId)
-      );
-    }
-
-    // 3. Text Search (title, url, tags)
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(b => 
-        b.title.toLowerCase().includes(q) || 
-        b.url.toLowerCase().includes(q) ||
-        (b.description && b.description.toLowerCase().includes(q)) ||
-        (b.tags && b.tags.some(t => t.name.toLowerCase().includes(q)))
-      );
-    }
-
-    return result;
-  }, [bookmarks, activeFilter, selectedTagId, searchQuery]);
-
-  const handleFilterChange = (filter) => {
-    setActiveFilter(filter);
-    setSelectedTagId(null);
+  const refreshVault = async () => {
+    await Promise.all([
+      fetchBookmarks(requestParams),
+      fetchTags(),
+    ]);
   };
 
   const handleTagSelect = (tagId) => {
-    if (selectedTagId === tagId) {
-      setSelectedTagId(null);
-      setActiveFilter('all');
-    } else {
-      setSelectedTagId(tagId);
-      setActiveFilter('tag');
-    }
+    setSelectedTagId(prev => (prev === tagId ? null : tagId));
   };
 
   const handleBookmarkCreated = async (data) => {
-    const bookmark = await addBookmark(data);
-    // Update tag counts locally
-    if (bookmark.tags?.length > 0) {
-      setTags(prev => prev.map(t => {
-        const inBookmark = bookmark.tags.some(bt => bt._id === t._id);
-        return inBookmark ? { ...t, count: t.count + 1 } : t;
-      }));
-    }
+    await addBookmark(data);
+    await refreshVault();
   };
 
   const handleBookmarkDeleted = async (id) => {
-    const deleted = bookmarks.find(b => b._id === id);
     await deleteBookmark(id);
-    // Update tag counts locally
-    if (deleted?.tags?.length > 0) {
-      setTags(prev => prev.map(t => {
-        const wasInBookmark = deleted.tags.some(bt => bt._id === t._id);
-        return wasInBookmark ? { ...t, count: Math.max(0, t.count - 1) } : t;
-      }));
-    }
+    await refreshVault();
   };
 
   const handleTagDeleted = async (id) => {
     await deleteTag(id);
     if (selectedTagId === id) {
       setSelectedTagId(null);
-      setActiveFilter('all');
     }
-    // Refresh bookmarks as tags were removed from them (cascading)
-    fetchBookmarks();
+    await refreshVault();
   };
 
-  const activeTagName = selectedTagId 
-    ? tags.find(t => t._id === selectedTagId)?.name 
-    : null;
-
   const loading = bmLoading || tagLoading;
+  const activeTagName = selectedTagId ? tags.find(tag => tag._id === selectedTagId)?.name : null;
+  const contextLabel = searchQuery
+    ? `Search: "${searchQuery}"`
+    : activeTagName
+      ? `#${activeTagName}`
+      : selectedCategory
+        ? `Category: ${selectedCategory}`
+        : activeFilter === 'recent'
+          ? 'Recently Added'
+          : activeFilter === 'all'
+            ? 'All Items'
+            : activeFilter[0].toUpperCase() + activeFilter.slice(1);
 
   return (
     <div className="h-screen flex flex-col bg-dark-800 overflow-hidden text-dark-50">
-      <Topbar 
-        onAddBookmark={() => setShowModal(true)} 
+      <Topbar
+        onAddBookmark={() => setShowModal(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar 
+        <Sidebar
           tags={tags}
           activeFilter={activeFilter}
           selectedTagId={selectedTagId}
-          onFilterChange={handleFilterChange}
+          onFilterChange={setActiveFilter}
           onTagSelect={handleTagSelect}
           onTagAdded={addTag}
           onTagDeleted={handleTagDeleted}
@@ -136,102 +121,132 @@ export default function Dashboard() {
           onClose={() => setSidebarOpen(false)}
         />
 
-        {/* Main Content */}
         <main className="flex-1 overflow-y-auto custom-scrollbar">
           <div className="p-4 lg:p-6 lg:max-w-7xl mx-auto">
-            
-            {/* Context Header */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-3">
-                <button 
+                <button
                   onClick={() => setSidebarOpen(true)}
                   className="lg:hidden p-2 bg-dark-700/50 rounded-xl border border-white/5"
                 >
                   <Menu className="w-5 h-5" />
                 </button>
                 <div>
-                  <h2 className="text-xl font-bold">
-                    {searchQuery 
-                      ? `Search: "${searchQuery}"` 
-                      : activeTagName 
-                        ? `#${activeTagName}` 
-                        : activeFilter === 'recent' 
-                          ? 'Recently Added' 
-                          : 'All Bookmarks'
-                    }
-                  </h2>
+                  <h2 className="text-xl font-bold">{contextLabel}</h2>
                   <p className="text-xs text-dark-500 font-medium uppercase tracking-widest mt-0.5">
-                    {filteredBookmarks.length} item{filteredBookmarks.length !== 1 ? 's' : ''} found
+                    {meta.total || bookmarks.length} item{(meta.total || bookmarks.length) !== 1 ? 's' : ''} found
                   </p>
                 </div>
               </div>
 
-              {(searchQuery || selectedTagId || activeFilter !== 'all') && (
-                <button 
-                  onClick={() => { setSearchQuery(''); setSelectedTagId(null); setActiveFilter('all'); }}
+              {(searchQuery || selectedTagId || selectedCategory || activeFilter !== 'all') && (
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedTagId(null);
+                    setSelectedCategory('');
+                    setActiveFilter('all');
+                  }}
                   className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] font-bold uppercase tracking-widest transition-all"
                 >
-                  Clear all filters
+                  Clear filters
                 </button>
               )}
             </div>
 
-            {/* Loading State */}
-            {loading && bookmarks.length === 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="glass rounded-2xl p-6 h-48 animate-pulse" />
+            {meta.categories?.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-8">
+                <button
+                  onClick={() => setSelectedCategory('')}
+                  className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                    !selectedCategory
+                      ? 'bg-primary-500/15 text-primary-300 border-primary-500/40'
+                      : 'bg-dark-700/60 text-dark-300 border-white/5'
+                  }`}
+                >
+                  All Categories
+                </button>
+                {meta.categories.map(category => (
+                  <button
+                    key={category}
+                    onClick={() => setSelectedCategory(prev => (prev === category ? '' : category))}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                      selectedCategory === category
+                        ? 'bg-primary-500/15 text-primary-300 border-primary-500/40'
+                        : 'bg-dark-700/60 text-dark-300 border-white/5'
+                    }`}
+                  >
+                    {category}
+                  </button>
                 ))}
               </div>
             )}
 
-            {/* Empty States */}
-            {!loading && filteredBookmarks.length === 0 && (
+            {loading && bookmarks.length === 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                {[...Array(6)].map((_, index) => (
+                  <div key={index} className="glass rounded-2xl p-6 h-56 animate-pulse" />
+                ))}
+              </div>
+            )}
+
+            {!loading && bookmarks.length === 0 && (
               <div className="flex flex-col items-center justify-center py-24 text-center">
                 <div className="w-20 h-20 bg-dark-700/50 rounded-3xl flex items-center justify-center mb-6 ring-1 ring-white/5 shadow-2xl">
-                  {searchQuery ? <Search className="w-10 h-10 text-dark-600" /> : <Bookmark className="w-10 h-10 text-dark-600" />}
+                  {searchQuery || selectedCategory || selectedTagId ? (
+                    <Search className="w-10 h-10 text-dark-600" />
+                  ) : (
+                    <Bookmark className="w-10 h-10 text-dark-600" />
+                  )}
                 </div>
                 <h3 className="text-dark-200 font-bold text-xl mb-2">
-                  {searchQuery ? 'No bookmarks found' : 'Your vault is empty'}
+                  {searchQuery || selectedCategory || selectedTagId ? 'No matching items found' : 'Your vault is empty'}
                 </h3>
                 <p className="text-dark-500 text-sm max-w-xs leading-relaxed">
-                  {searchQuery 
-                    ? `We couldn't find any results for "${searchQuery}". Maybe try a different keyword?` 
-                    : "Save your favorite links, articles, and research here. They'll be safe and searchable forever."}
+                  {searchQuery || selectedCategory || selectedTagId
+                    ? 'Try a different keyword, tag, category, or content type to widen the results.'
+                    : 'Save links, notes, and prompts here so they stay easy to search from any device.'}
                 </p>
-                {!searchQuery && (
-                  <button 
+                {!searchQuery && !selectedCategory && !selectedTagId && (
+                  <button
                     onClick={() => setShowModal(true)}
                     className="btn-primary mt-8 px-8 py-3 rounded-2xl shadow-xl shadow-primary-500/20"
                   >
-                    Add your first link
+                    Add your first item
                   </button>
                 )}
               </div>
             )}
 
-            {/* Bookmark Grid */}
-            {!loading && filteredBookmarks.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                {filteredBookmarks.map((bookmark) => (
-                  <BookmarkCard 
-                    key={bookmark._id} 
-                    bookmark={bookmark} 
-                    onDelete={handleBookmarkDeleted}
-                    onTagClick={handleTagSelect}
-                  />
-                ))}
-              </div>
+            {!loading && bookmarks.length > 0 && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {bookmarks.map((bookmark) => (
+                    <BookmarkCard
+                      key={bookmark._id}
+                      bookmark={bookmark}
+                      onDelete={handleBookmarkDeleted}
+                      onTagClick={handleTagSelect}
+                    />
+                  ))}
+                </div>
+
+                {meta.total > bookmarks.length && (
+                  <div className="mt-6 text-center text-xs text-dark-500 flex items-center justify-center gap-2">
+                    <Layers className="w-3.5 h-3.5" />
+                    Showing the first {bookmarks.length} of {meta.total} items. Pagination support is ready on the backend.
+                  </div>
+                )}
+              </>
             )}
           </div>
           <div className="h-10 safe-bottom" />
         </main>
       </div>
 
-      {/* Modals */}
       {showModal && (
-        <AddBookmarkModal 
-          tags={tags} 
+        <AddBookmarkModal
+          tags={tags}
           onClose={() => setShowModal(false)}
           onAdded={handleBookmarkCreated}
         />

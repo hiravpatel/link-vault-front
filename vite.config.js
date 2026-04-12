@@ -43,11 +43,14 @@ export default defineConfig({
             }
           },
           {
-            urlPattern: /^http:\/\/localhost:5000\/api/,
-            handler: 'NetworkFirst',
+            urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
+            handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'api-cache',
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 5 }
+              cacheName: 'linkvault-api-cache',
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 5 },
+              cacheableResponse: {
+                statuses: [0, 200],
+              }
             }
           }
         ]
