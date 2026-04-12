@@ -1,16 +1,91 @@
 import axios from 'axios';
+import { clearSession, getAccessToken, saveSession } from '../auth/sessionStore';
 
-const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+const baseURL = import.meta.env.VITE_API_URL || '/api';
+
+export const refreshClient = axios.create({
+  baseURL,
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 });
 
-// Request interceptor: attach token
+const apiClient = axios.create({
+  baseURL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: true,
+});
+
+const AUTH_EXCLUDED_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/refresh',
+  '/auth/logout',
+];
+
+let refreshPromise = null;
+
+function isPublicAuthPath(url = '') {
+  return AUTH_EXCLUDED_PATHS.some(path => url.includes(path));
+}
+
+function redirectToLogin() {
+  clearSession();
+
+  if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+    window.location.assign('/login');
+  }
+}
+
+function mapApiError(error) {
+  if (!error.response) {
+    return {
+      message: navigator.onLine
+        ? 'Unable to reach the server right now. Please try again.'
+        : 'You appear to be offline. Check your connection and try again.',
+      status: 0,
+      code: 'NETWORK_ERROR',
+      errors: [],
+      requestId: null,
+    };
+  }
+
+  return {
+    message: error.response.data?.message || 'Something went wrong',
+    status: error.response.status,
+    code: error.response.data?.code || 'UNKNOWN_ERROR',
+    errors: error.response.data?.details || error.response.data?.errors || [],
+    requestId: error.response.data?.requestId || null,
+  };
+}
+
+async function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = refreshClient
+      .post('/auth/refresh')
+      .then((response) => {
+        const session = response.data?.data;
+        if (session?.accessToken && session?.user) {
+          saveSession(session);
+        }
+        return session?.accessToken || null;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
+}
+
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('lv_token');
+    const token = getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -19,36 +94,43 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-/**
- * Response interceptor: handle token expiration and standardise data access
- *
- * Backend returns: { success, message, data, errors }
- */
 apiClient.interceptors.response.use(
-  (response) => {
-    // Return only the data part of the response body for convenience
-    // This is the { success, message, data } object
-    return response.data;
-  },
-  (error) => {
-    // Handle 401 Unauthorized
-    if (error.response?.status === 401) {
-      localStorage.removeItem('lv_token');
-      localStorage.removeItem('lv_user');
-      if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
-        window.location.href = '/login';
+  (response) => response.data,
+  async (error) => {
+    const originalRequest = error.config || {};
+    const requestUrl = originalRequest.url || '';
+
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !isPublicAuthPath(requestUrl)
+    ) {
+      originalRequest._retry = true;
+
+      try {
+        const token = await refreshAccessToken();
+        if (!token) {
+          redirectToLogin();
+          return Promise.reject(mapApiError(error));
+        }
+
+        originalRequest.headers = {
+          ...originalRequest.headers,
+          Authorization: `Bearer ${token}`,
+        };
+
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        redirectToLogin();
+        return Promise.reject(mapApiError(refreshError));
       }
     }
 
-    // Extract message from backend response if available
-    const message = error.response?.data?.message || 'Something went wrong';
-    const errors = error.response?.data?.errors || [];
+    if (error.response?.status === 401 && requestUrl.includes('/auth/refresh')) {
+      redirectToLogin();
+    }
 
-    return Promise.reject({
-      message,
-      errors,
-      status: error.response?.status,
-    });
+    return Promise.reject(mapApiError(error));
   }
 );
 
